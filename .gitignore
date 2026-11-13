@@ -1,0 +1,7 @@
+/private/
+*.zip
+.env
+.env.*
+*.pem
+*.key
+*.log
