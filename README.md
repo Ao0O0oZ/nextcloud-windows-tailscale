@@ -4,6 +4,8 @@
 
 部署后，获授权的设备可跨网络打开网页并双向同步文件，无需在路由器上转发端口。主机也可以通过独立的同步目录日常编辑文件。误删的文件可以尝试从 Nextcloud 网页回收站恢复，指南也提供了 Windows 回收站的验证步骤。
 
+如果希望由 Codex 协助实际部署，在 Codex 中打开本仓库并调用 `$deploy-nextcloud-windows`，再告诉它要在哪台 Windows 电脑上部署。 [部署技能](.agents/skills/deploy-nextcloud-windows/SKILL.md)
+
 ## 依赖与安装顺序
 
 准备一台符合 Docker Desktop 系统要求的 Windows 11 电脑，启用硬件虚拟化，至少有 8 GB 系统内存。用有管理员权限的 Windows 账户完成安装。为 Windows 上的云盘数据、Docker 镜像与数据库，以及每台电脑上的同步副本分别留出空间。 [Docker Desktop 系统要求](https://docs.docker.com/desktop/setup/install/windows-install/#system-requirements)
