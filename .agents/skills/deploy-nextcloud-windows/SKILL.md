@@ -1,11 +1,13 @@
 ---
 name: deploy-nextcloud-windows
-description: Deploy or verify a private Nextcloud All-in-One file sync server on Windows using Docker Desktop with WSL 2 and Tailscale Serve. Use for hands-on setup, restarting an existing deployment, or diagnosing access and desktop sync for this stack.
+description: Deploy and maintain a private Nextcloud All-in-One file sync server on Windows using Docker Desktop with WSL 2 and Tailscale Serve. Use for hands-on setup, sync troubleshooting, account isolation, shared folders, and ownership migration on this stack.
 ---
 
 # Deploy Nextcloud AIO on Windows
 
 Use the [repository deployment guide](../../../README.md) for the maintained PowerShell commands and UI steps. If this skill was copied out of the repository, use the [public deployment guide](https://github.com/Ao0O0oZ/nextcloud-windows-tailscale#readme). Check the linked official documentation when an installed version behaves differently.
+
+Use Tailscale policy to control access to the private HTTPS endpoint. Use Nextcloud accounts and grants to control access to files after login. Test both when diagnosing a permission problem.
 
 ## Inspect the Windows host
 
@@ -34,6 +36,16 @@ If Docker is available, check `docker --context desktop-linux info --format '{{.
 6. On the requested clients, connect Tailscale, open the HTTPS URL, and use Nextcloud Desktop's browser authorization flow. Select an empty sync directory for a new connection. If it already contains files, check the existing mapping and contents before connecting it to a fresh or restored server. For Windows recycle-bin behavior, configure virtual files and mark the sync root always available locally. After quitting Nextcloud Desktop, set `moveToTrash=true` in the existing `[General]` section of `%APPDATA%\Nextcloud\nextcloud.cfg`, preserve other keys, and restart the client.
 
 Continue the authorized steps yourself when you can operate the target host. For login, access consent, or a reboot that needs the user, state the exact action and resume from a new status check afterward. When a command fails, inspect the current state before rerunning it. Use bounded waits for startup and check the relevant component's recent logs if it stays unhealthy.
+
+## Manage accounts, shared folders, and migrations
+
+For existing accounts, follow [the account isolation and migration section](../../../README.md#6-多账号隔离与迁移).
+
+- Use regular accounts for daily sync and a separate administrator account. Keep personal directories under their owners' accounts. Grant access to common folders through Team Folders and the intended Nextcloud user group. Check group membership and existing shares on personal folders and their contents, then verify each account can open its own files and only the shared files intended for it. Use separate browser sessions for these checks.
+- Use folder selection or ignore rules to reduce what a client syncs. Enforce account isolation with server-side grants. Put Git worktrees and automation scratch directories outside all sync roots. If a directory goes missing, pause the affected sync connections and check recent server-side move activity and the trash before changing files.
+- Pause relevant sync clients and verify a recovery path before transferring ownership. Select only the intended source folder. If the transfer fails, inspect both storage locations, the file index, share records, and server logs before retrying. If the files are verified at the target and only its index is missing, preserve old versions and scan that destination with `occ files:scan --path=/USER/files/PATH`. Verify the recovered files and review the old shares and version history separately.
+- For retirement, verify a working administrator login, migrate or disconnect old sync connections, and check the old account's trash, versions, and shares. Disable the account for a reversible cutover. Delete the account or a migration archive only once the user has authorized the deletion and any history they want to keep is preserved.
+- If Android photo uploads are requested, configure a custom local folder and cloud destination in Auto Upload. Test with a newly created photo and one moved into the folder. For a request for two-way photo sync, verify each direction and deletion behavior before reporting it complete.
 
 ## Verify the requested outcome
 

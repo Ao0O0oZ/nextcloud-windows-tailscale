@@ -1,8 +1,16 @@
 # Windows 上的私有 Nextcloud 云盘
 
-这套方案把一台 Windows 11 电脑变成私有云盘。用 Docker Desktop 的 WSL 2 后端运行 Nextcloud All-in-One（AIO），用 Tailscale Serve 提供私有 HTTPS，再通过 Nextcloud Desktop 连接各台电脑的同步目录。
+这套方案把一台 Windows 11 电脑变成私有云盘。授权设备可跨网络访问网页并双向同步文件，路由器无需端口转发。服务器本机也可以通过独立的同步目录编辑文件。
 
-部署后，获授权的设备可跨网络打开网页并双向同步文件，无需在路由器上转发端口。主机也可以通过独立的同步目录日常编辑文件。误删的文件可以尝试从 Nextcloud 网页回收站恢复，指南也提供了 Windows 回收站的验证步骤。
+## 工作原理
+
+- **Nextcloud 管理文件和账号。** Nextcloud AIO 作为 Linux 容器在 Docker Desktop 的 WSL 2 后端运行。Nextcloud 管理用户、文件权限、版本和回收站。Nextcloud Desktop 把每台电脑的同步目录与服务器双向同步。
+- **Tailscale 提供私有网络入口。** 客户端接入同一个 Tailscale 网络（tailnet），访问策略决定谁可连到服务器。Serve 在服务器的 `*.ts.net` 域名上提供 HTTPS，把请求转发给本机的 Nextcloud。访问文件仍需通过 Nextcloud 登录和权限校验。 [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve)
+
+```text
+已授权的设备 → Tailscale Serve :443 → 127.0.0.1:11000 → Nextcloud AIO
+服务器本机   → https://127.0.0.1:8080 → AIO 管理页
+```
 
 如果希望由 Codex 协助实际部署，在 Codex 中打开本仓库并调用 `$deploy-nextcloud-windows`，再告诉它要在哪台 Windows 电脑上部署。 [部署技能](.agents/skills/deploy-nextcloud-windows/SKILL.md)
 
@@ -18,11 +26,6 @@
 | [Nextcloud Desktop](https://docs.nextcloud.com/server/stable/user_manual/en/desktop/installation.html) | 每台需要文件同步的电脑 | 在服务端可访问后安装并连接。如果服务器也需要一份日常编辑用的同步副本，也在服务器上安装。 |
 
 Windows 自带的 PowerShell 可以执行本指南的命令。Docker Desktop 自带运行 Linux 容器所需的环境，额外安装 Ubuntu 等发行版是可选的。 [Docker Desktop 的 WSL 2 后端](https://docs.docker.com/desktop/features/wsl/)
-
-```text
-已授权的设备 → Tailscale Serve :443 → 127.0.0.1:11000 → Nextcloud AIO
-服务器本机   → https://127.0.0.1:8080 → AIO 管理页
-```
 
 ## 1. 准备 Windows、WSL 2 和目录
 
@@ -145,6 +148,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Nextcloud AIO mastercontainer did not start.' 
 
 Windows 客户端对本机回收站的处理取决于版本、虚拟文件模式和文件状态。以实际的删除与还原测试为准。Nextcloud 网页端的「已删除文件」可单独用于恢复。 [桌面同步菜单](https://docs.nextcloud.com/server/stable/user_manual/en/desktop/usage.html) · [客户端配置文件](https://docs.nextcloud.com/server/stable/user_manual/en/desktop/configfile.html) · [Nextcloud 已删除文件](https://docs.nextcloud.com/server/stable/user_manual/en/files/deleted_file_management.html)
 
+- **仅同步需要的内容。** 在桌面客户端选择要同步的目录，并按需配置忽略规则。把 Git 工作区和自动化生成的临时目录放在同步范围外。需要限制某台设备对目录的访问时，使用未获该目录授权的普通账号。 [Nextcloud Desktop 使用说明](https://docs.nextcloud.com/server/stable/user_manual/en/desktop/usage.html)
+- **按需上传 Android 照片。** 手机连接 Tailscale 后，在 Nextcloud 的「自动上传」中添加自定义本地目录，指定云端目的地，再放入几张照片验证。这个流程用于手机向云端上传。 [Nextcloud Android 自动上传功能](https://github.com/nextcloud/android/blob/master/CHANGELOG.md)
+
 ## 5. 验收与恢复
 
 - **服务健康。** 在服务器运行 `docker --context desktop-linux ps --filter name=nextcloud-aio`，确认运行中的组件健康。用浏览器打开私有 HTTPS 地址，确认登录页可用。服务器需要保持开机并避免进入睡眠。重启 Windows 并登录后再检查一次。
@@ -152,3 +158,9 @@ Windows 客户端对本机回收站的处理取决于版本、虚拟文件模式
 - **删除恢复。** 在确认测试文件完整保存在 Windows 后，从网页端删除。等待同步，检查 Windows 回收站，再还原文件并确认重新上传。另用测试文件验证 Nextcloud 网页回收站。
 - **实例备份。** 需要重装、迁移或保留原账号与版本历史时，通过 AIO 管理页创建 Borg 备份。备份仓库放在独立存储，加密密钥另存，并在维护计划中安排恢复演练。 [AIO 备份和恢复](https://github.com/nextcloud/all-in-one#backup)
 - **常见连接问题。** 网页连不上时先核对两端 Tailscale 是否上线、域名是否正确、访问规则是否允许 TCP 443，然后检查 `tailscale serve status` 和 Docker 组件。若设备启用了系统代理，可让私有域名直连后再测试。 [Tailscale Serve 排障](https://tailscale.com/docs/features/tailscale-serve)
+
+## 6. 多账号隔离与迁移
+
+- **个人与共享目录。** 为每个人创建普通账号，管理账号单独使用。个人目录放在各自账户下。在「账户」中创建用户组并添加成员，再在「管理设置 → 团队文件夹」给该组授权。授权后的目录出现在成员的「文件」页面。Nextcloud 的「Teams（团队）」页面列出另行创建并加入的团队。给成员授予删除权限后，他们可以删除共同目录里的文件。 [用户组管理](https://docs.nextcloud.com/server/stable/admin_manual/configuration_user/user_configuration.html#managing-groups) · [团队文件夹](https://github.com/nextcloud/groupfolders#configuring-group-folders)
+- **迁移旧账号的数据。** 先暂停相关客户端同步，并通过 AIO 备份。通过 Nextcloud 的文件所有权转移功能迁移指定目录，再用两个新账号分别验证个人文件和共享文件的访问范围。迁移出错时，先对照源与目标的文件路径、大小、索引和共享记录，再决定如何恢复。若确认文件完整落在目标且只是未登记，可在保存旧版本后用 `occ files:scan --path=...` 扫描该目录。文件扫描只更新索引，旧版本和共享需要另行核对。 [所有权转移和文件扫描](https://docs.nextcloud.com/server/stable/admin_manual/occ_files.html)
+- **停用与清理。** 确认仍有可用的管理员账号，将各设备上的旧同步连接解除并保留本地文件。核对旧账号的回收站、历史版本及共享，先取回仍需保留的数据。可先停用旧账号，确认迁移验收后再删除。迁移时临时归档的版本若是最后一份，确认可以舍弃后再清理。 [停用与删除账号](https://docs.nextcloud.com/server/stable/admin_manual/configuration_user/user_configuration.html#disable-and-enable-users)
